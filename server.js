@@ -3,6 +3,7 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 
 const HTTP_PORT = Number(process.env.PORT || 8080);
+const HTTP_HOST = process.env.HOST || '0.0.0.0';
 const MAX_ROOM_PLAYERS = 4;
 const STATE_UPDATE_INTERVAL_MS = 50;
 const MAX_WORLD_COORDINATE = 100000;
@@ -553,7 +554,7 @@ wss.on('connection', (socket) => {
   });
 });
 
-server.listen(HTTP_PORT, '127.0.0.1', () => {
-  console.log(`[Server] Listening on http://127.0.0.1:${HTTP_PORT}`);
-  console.log(`[Server] WebSocket endpoint ws://127.0.0.1:${HTTP_PORT}/ws`);
+server.listen(HTTP_PORT, HTTP_HOST, () => {
+  console.log(`[Server] Listening on http://${HTTP_HOST}:${HTTP_PORT}`);
+  console.log(`[Server] WebSocket endpoint ws://${HTTP_HOST}:${HTTP_PORT}/ws`);
 });
