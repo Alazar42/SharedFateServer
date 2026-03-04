@@ -5,7 +5,7 @@ const { WebSocketServer } = require('ws');
 const HTTP_PORT = Number(process.env.PORT || 8080);
 const HTTP_HOST = process.env.HOST || '0.0.0.0';
 const MAX_ROOM_PLAYERS = 4;
-const STATE_UPDATE_INTERVAL_MS = 50;
+const STATE_UPDATE_INTERVAL_MS = 20;
 const MAX_WORLD_COORDINATE = 100000;
 const MAX_VELOCITY = 5000;
 
