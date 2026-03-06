@@ -34,6 +34,7 @@ function createInitialState() {
     y: INITIAL_Y,
     vx: 0,
     vy: 0,
+    onFloor: true,
     facing: 1,
     moveDirection: 0,
     jumpRequested: false,
@@ -209,7 +210,8 @@ function startGameIfAllReady(room) {
       players: playersPayload,
       initialState: {
         position: { x: room.state.x, y: room.state.y },
-        velocity: { x: room.state.vx, y: room.state.vy }
+        velocity: { x: room.state.vx, y: room.state.vy },
+        onFloor: room.state.onFloor
       }
     });
   }
@@ -483,17 +485,21 @@ function handleStateUpdate(socket, payload) {
   const y = clampFiniteNumber(positionPayload.y, -MAX_WORLD_COORDINATE, MAX_WORLD_COORDINATE, room.state.y);
   const vx = clampFiniteNumber(velocityPayload.x, -MAX_VELOCITY, MAX_VELOCITY, room.state.vx);
   const vy = clampFiniteNumber(velocityPayload.y, -MAX_VELOCITY, MAX_VELOCITY, room.state.vy);
+  const onFloorPayload = payload ? payload.onFloor : undefined;
+  const onFloor = typeof onFloorPayload === 'boolean' ? onFloorPayload : room.state.onFloor;
 
   room.state.x = x;
   room.state.y = y;
   room.state.vx = vx;
   room.state.vy = vy;
+  room.state.onFloor = onFloor;
   player.lastStateAt = now;
 
   broadcast(room, {
     type: 'player_state',
     position: { x, y },
     velocity: { x: vx, y: vy },
+    onFloor,
     actorId: player.id,
     serverTime: now
   });
