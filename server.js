@@ -8,6 +8,9 @@ const MAX_ROOM_PLAYERS = 4;
 const STATE_UPDATE_INTERVAL_MS = 20;
 const MAX_WORLD_COORDINATE = 100000;
 const MAX_VELOCITY = 5000;
+const VOICE_PACKET_INTERVAL_MS = 35;
+const VOICE_MAX_PACKET_BYTES = 2048;
+const VOICE_CODEC_MULAW8 = 'mulaw8';
 
 const INITIAL_X = -332;
 const INITIAL_Y = 291;
@@ -185,6 +188,18 @@ function clampFiniteNumber(value, min, max, fallback) {
   return Math.max(min, Math.min(max, numeric));
 }
 
+function decodeBase64Payload(value) {
+  if (typeof value !== 'string' || value.length === 0) {
+    return null;
+  }
+
+  try {
+    return Buffer.from(value, 'base64');
+  } catch (_error) {
+    return null;
+  }
+}
+
 function startGameIfAllReady(room) {
   if (room.players.size < 2) {
     return;
@@ -274,6 +289,7 @@ function handleCreateRoom(socket, payload) {
     ready: false,
     role: '',
     lastStateAt: 0,
+    lastVoiceAt: 0,
     socket
   };
 
@@ -332,6 +348,7 @@ function handleJoinRoom(socket, payload) {
     ready: false,
     role: '',
     lastStateAt: 0,
+    lastVoiceAt: 0,
     socket
   });
 
@@ -505,6 +522,64 @@ function handleStateUpdate(socket, payload) {
   });
 }
 
+function handleVoicePacket(socket, payload) {
+  const session = clients.get(socket);
+  if (!session || !session.roomCode) {
+    return;
+  }
+
+  const room = rooms.get(session.roomCode);
+  if (!room) {
+    return;
+  }
+
+  const player = room.players.get(session.playerId);
+  if (!player) {
+    return;
+  }
+
+  const now = Date.now();
+  if (now - (player.lastVoiceAt || 0) < VOICE_PACKET_INTERVAL_MS) {
+    return;
+  }
+
+  const codec = String(payload?.codec || '').toLowerCase();
+  if (codec !== VOICE_CODEC_MULAW8) {
+    return;
+  }
+
+  const audioBuffer = decodeBase64Payload(payload?.audio);
+  if (!audioBuffer || audioBuffer.length === 0 || audioBuffer.length > VOICE_MAX_PACKET_BYTES) {
+    return;
+  }
+
+  const sampleRate = Math.round(clampFiniteNumber(payload?.sampleRate, 4000, 24000, 12000));
+  const channels = Math.round(clampFiniteNumber(payload?.channels, 1, 1, 1));
+  const sequence = Math.max(0, Math.round(clampFiniteNumber(payload?.sequence, 0, Number.MAX_SAFE_INTEGER, 0)));
+  const frameMs = Math.round(clampFiniteNumber(payload?.frameMs, 10, 80, 40));
+
+  player.lastVoiceAt = now;
+
+  const relayPayload = {
+    type: 'voice_packet',
+    actorId: player.id,
+    codec,
+    sampleRate,
+    channels,
+    sequence,
+    frameMs,
+    audio: audioBuffer.toString('base64')
+  };
+
+  for (const recipient of room.players.values()) {
+    if (recipient.id === player.id) {
+      continue;
+    }
+
+    safeSend(recipient.socket, relayPayload);
+  }
+}
+
 function handleMessage(socket, payload) {
   const type = String(payload?.type || '');
   switch (type) {
@@ -525,6 +600,9 @@ function handleMessage(socket, payload) {
       break;
     case 'state_update':
       handleStateUpdate(socket, payload);
+      break;
+    case 'voice_packet':
+      handleVoicePacket(socket, payload);
       break;
     default:
       safeSend(socket, { type: 'error', message: 'Unknown message type' });
